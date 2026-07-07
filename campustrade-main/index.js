@@ -212,7 +212,12 @@ app.post("/login", async (req, res) => {
       return res.json({ success: false, message: "Invalid credentials" });
     const accessToken = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, { expiresIn: "15m" });
     const refreshToken = jwt.sign({ id: user._id, email: user.email }, JWT_REFRESH_SECRET, { expiresIn: "7d" });
-    res.cookie("refreshToken", refreshToken, { httpOnly: true, secure: true, sameSite: "None" });
+    const isSecure = req.headers["x-forwarded-proto"] === "https";
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite: isSecure ? "None" : "Lax"
+    });
     res.json({ success: true, message: "Login successful", accessToken });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Server error" });
@@ -234,7 +239,12 @@ app.post("/check-refresh-token", (req, res) => {
 });
 
 app.post("/logout", (req, res) => {
-  res.clearCookie("refreshToken", { httpOnly: true, secure: true, sameSite: "None" });
+  const isSecure = req.headers["x-forwarded-proto"] === "https";
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    secure: isSecure,
+    sameSite: isSecure ? "None" : "Lax"
+  });
   return res.status(200).json({ message: "Logout successful" });
 });
 
