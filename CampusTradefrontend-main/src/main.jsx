@@ -24,6 +24,7 @@ import PrivateComponent from "./components/protected_routing.jsx";
 const router = createBrowserRouter(
   createRoutesFromElements(
     <Route path="/" element={<App />}>
+      <Route index element={<Front />} />
       <Route path="/front" element={<Front />} />
       <Route
         path="/uploadItem"
