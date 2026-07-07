@@ -1,0 +1,33 @@
+services:
+  backend:
+    build: ./campustrade-main
+    container_name: campustrade-backend
+    restart: always
+    environment:
+      - MONGO_URI=${MONGO_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASS=${EMAIL_PASS}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - PORT=8000
+    # Port 8000 is internal; Nginx handles routing.
+    # Exposing it for local debugging/testing option if needed, but not mapping it to host for production security.
+    expose:
+      - "8000"
+
+  frontend:
+    build: ./CampusTradefrontend-main
+    container_name: campustrade-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend

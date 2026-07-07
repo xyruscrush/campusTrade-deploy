@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+/* ─── Base ─────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #060a14;
+  color: #e2e8f0;
+  margin: 0;
+  padding: 0;
+}
+
+a { text-decoration: none; color: inherit; }
+input, textarea, select { font-family: inherit; }
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+
+/* ─── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.4); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.65); }
+::selection { background: rgba(99,102,241,0.35); }
+
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+@keyframes float-a {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-28px) scale(1.03); }
+}
+@keyframes float-b {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-20px) scale(1.04); }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(22px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes ping {
+  75%, 100% { transform: scale(2); opacity: 0; }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@keyframes slideInRight {
+  from { transform: translateX(60px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes shimmer-line {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+.ct-float-a { animation: float-a 9s ease-in-out infinite; }
+.ct-float-b { animation: float-b 12s ease-in-out infinite 2s; }
+.ct-fade-up { animation: fadeUp 0.55s cubic-bezier(0.16,1,0.3,1) both; }
+.ct-fade-in { animation: fadeIn 0.35s ease both; }
+.ct-card-in { animation: cardIn 0.45s cubic-bezier(0.16,1,0.3,1) both; }
+.ct-ping { animation: ping 1.2s cubic-bezier(0,0,0.2,1) infinite; }
+.ct-spin { animation: spin 0.8s linear infinite; }
+.ct-pulse { animation: pulse 2s ease-in-out infinite; }
+.ct-slide-in { animation: slideIn 0.3s cubic-bezier(0.16,1,0.3,1) both; }
+.ct-slide-right { animation: slideInRight 0.4s cubic-bezier(0.16,1,0.3,1) both; }
+
+.ct-d1 { animation-delay: 0.08s; }
+.ct-d2 { animation-delay: 0.16s; }
+.ct-d3 { animation-delay: 0.24s; }
+.ct-d4 { animation-delay: 0.32s; }
+.ct-d5 { animation-delay: 0.40s; }
+
+/* Card hover spring effect */
+.ct-card {
+  transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.4s ease;
+}
+.ct-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.45), 0 0 0 1px rgba(99,102,241,0.15), 0 8px 32px rgba(99,102,241,0.1);
+}
+
+/* Accent underline slide */
+.ct-underline-slide {
+  position: relative;
+  overflow: hidden;
+}
+.ct-underline-slide::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #6366f1, #a78bfa);
+  transition: width 0.4s cubic-bezier(0.16,1,0.3,1);
+}
+.ct-card:hover .ct-underline-slide::after { width: 100%; }
