@@ -62,7 +62,7 @@ export default function Front() {
             <span className="ct-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
           </span>
-          Campus marketplace · Live now
+          Campus marketplace · Live & Active
         </div>
 
         {/* Main heading */}
