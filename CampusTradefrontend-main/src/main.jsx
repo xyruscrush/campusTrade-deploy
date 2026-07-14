@@ -5,6 +5,7 @@ import App from "./App.jsx";
 import Login from "./components/login.jsx";
 import Signup from "./components/signup.jsx";
 import AddItem from "./components/add_items.jsx";
+import CollegeDashboard from "./components/college_dashboard.jsx";
 import { UserProvider } from "./context/userContext.jsx";
 import Front from "./components/front.jsx";
 import Upload from "./components/upload.jsx";
@@ -84,6 +85,7 @@ const router = createBrowserRouter(
       />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/college/dashboard" element={<CollegeDashboard />} />
     </Route>
   )
 );
