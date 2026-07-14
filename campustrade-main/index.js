@@ -893,7 +893,7 @@ const checkOverdueRentals = async () => {
             if (college) {
               // Send notification to College Admin
               await new Notification({
-                recipient: college.email,
+                recipient: rental.buyer,
                 sender: "system",
                 item_name: rental.item_name,
                 price: rental.price_per_day,
