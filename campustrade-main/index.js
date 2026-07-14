@@ -937,17 +937,26 @@ const checkOverdueRentals = async () => {
           const daysRemaining = Math.max(0, Math.floor((securityDeposit - lateFee) / (1.5 * dailyPrice)));
           console.log(`[BACKGROUND SCHEDULER] Rental ${rental._id} late by ${lateDays} days. Late fee: ₹${lateFee}. Deposit remaining: ₹${securityDeposit - lateFee}. Days left: ${daysRemaining}`);
 
-          // Daily late warning notification
-          await new Notification({
-            recipient: rental.buyer,
-            sender: "system",
-            item_name: rental.item_name,
-            price: rental.price_per_day,
-            days: rental.days,
-            total_price: lateFee.toString(),
+          const existingNotif = await Notification.findOne({
             rental_id: rental._id.toString(),
-            type: "late_warning_buyer",
-          }).save();
+            type: "daily_penalty_deduction",
+            days: lateDays
+          });
+
+          if (!existingNotif) {
+            await new Notification({
+              recipient: rental.buyer,
+              sender: "system",
+              item_name: rental.item_name,
+              price: (1.5 * dailyPrice).toFixed(2),
+              days: lateDays,
+              total_price: lateFee.toFixed(2),
+              rental_id: rental._id.toString(),
+              type: "daily_penalty_deduction"
+            }).save();
+            
+            console.log(`[BACKGROUND SCHEDULER] Sent daily penalty notification for rental ${rental._id}, late day: ${lateDays}`);
+          }
         }
       }
     }
