@@ -48,7 +48,9 @@ function Show() {
       .catch((error) => console.error("Error fetching item details:", error));
   }, [id]);
 
-  const totalPrice = item ? (parseFloat(item.price_per_day) * days).toFixed(2) : "0.00";
+  const rentTotal = item ? parseFloat(item.price_per_day) * days : 0;
+  const depositVal = item ? parseFloat(item.security_deposit || "0") : 0;
+  const totalPrice = (rentTotal + depositVal).toFixed(2);
 
   const incrementDays = () => { if (days < 365) setDays((p) => p + 1); };
   const decrementDays = () => { if (days > 1) setDays((p) => p - 1); };
@@ -209,20 +211,27 @@ function Show() {
                 <div className="rounded-xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
                   <p className="text-gray-300 leading-relaxed text-[15px]">{item.description}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="rounded-xl p-4" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
                     <div className="flex items-center gap-2 mb-2">
                       <FiClock size={14} className="text-emerald-400" />
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Daily Rate</span>
                     </div>
-                    <p className="text-2xl font-bold text-emerald-400">₹{item.price_per_day}<span className="text-sm font-normal text-gray-500">/day</span></p>
+                    <p className="text-xl font-bold text-emerald-400">₹{item.price_per_day}<span className="text-xs font-normal text-gray-500">/day</span></p>
+                  </div>
+                  <div className="rounded-xl p-4" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <FiShield size={14} className="text-amber-400" />
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Deposit</span>
+                    </div>
+                    <p className="text-xl font-bold text-amber-400">₹{item.security_deposit || "0"}</p>
                   </div>
                   <div className="rounded-xl p-4" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
                     <div className="flex items-center gap-2 mb-2">
                       <FiPhone size={14} className="text-indigo-400" />
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</span>
                     </div>
-                    <p className="text-lg font-semibold text-gray-200">{item.mobile_number}</p>
+                    <p className="text-[15px] font-semibold text-gray-200 truncate">{item.mobile_number}</p>
                   </div>
                 </div>
 
@@ -242,15 +251,25 @@ function Show() {
                       </div>
                       <span className="text-sm text-gray-400">{days === 1 ? "day" : "days"}</span>
                       <div className="text-right flex-grow">
-                        <p className="text-xs text-gray-500 mb-0.5">Total Amount</p>
-                        <p className="text-3xl font-extrabold" style={{ background: "linear-gradient(135deg,#34d399,#10b981)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                        <p className="text-xs text-gray-500 mb-0.5">Total to Pay</p>
+                        <p className="text-3xl font-extrabold text-emerald-400">
                           ₹{totalPrice}
                         </p>
                       </div>
                     </div>
-                    <div className="mt-4 pt-3 flex items-center justify-between text-xs text-gray-500" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                      <span>₹{item.price_per_day} × {days} {days === 1 ? "day" : "days"}</span>
-                      <span className="text-emerald-400 font-medium">= ₹{totalPrice}</span>
+                    <div className="mt-4 pt-3 space-y-1.5 text-xs text-gray-500" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div className="flex justify-between">
+                        <span>Rental Fee ({days} {days === 1 ? "day" : "days"}):</span>
+                        <span className="text-gray-300">₹{rentTotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Security Deposit (Refundable):</span>
+                        <span className="text-gray-300">₹{depositVal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-emerald-400 pt-1.5" style={{ borderTop: "1px dashed rgba(255,255,255,0.06)" }}>
+                        <span>Grand Total:</span>
+                        <span>₹{totalPrice}</span>
+                      </div>
                     </div>
                   </div>
                 )}
