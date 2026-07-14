@@ -2,11 +2,17 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useUserContext } from "../context/userContext";
-import { FiArrowLeft, FiBell, FiDollarSign, FiClock, FiRotateCcw, FiMessageSquare } from "react-icons/fi";
+import { FiArrowLeft, FiBell, FiDollarSign, FiClock, FiRotateCcw, FiMessageSquare, FiKey, FiCheckCircle, FiAlertTriangle } from "react-icons/fi";
 
 const typeConfig = {
-  rental: { icon: FiDollarSign, color: "#10b981", bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.15)", label: "Item Rented!" },
+  rental: { icon: FiDollarSign, color: "#10b981", bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.15)", label: "Order Created" },
+  handover_otp: { icon: FiKey, color: "#a5b4fc", bg: "rgba(99,102,241,0.1)", border: "rgba(99,102,241,0.15)", label: "Awaiting Handover" },
+  pending_handover: { icon: FiClock, color: "#f59e0b", bg: "rgba(245,158,11,0.1)", border: "rgba(245,158,11,0.15)", label: "Meetup & OTP Needed" },
+  handover_complete_seller: { icon: FiCheckCircle, color: "#10b981", bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.15)", label: "Handover Verified" },
+  handover_complete_buyer: { icon: FiCheckCircle, color: "#10b981", bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.15)", label: "Rental Active" },
   returned: { icon: FiRotateCcw, color: "#6366f1", bg: "rgba(99,102,241,0.1)", border: "rgba(99,102,241,0.15)", label: "Item Returned" },
+  late_fee_payout: { icon: FiDollarSign, color: "#ef4444", bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.15)", label: "Late Fees Payout" },
+  college_escalation: { icon: FiAlertTriangle, color: "#ef4444", bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.15)", label: "Escalation Alert" },
 };
 
 export default function Notifications() {
@@ -122,15 +128,44 @@ export default function Notifications() {
                           </span>
                         </div>
                         <p className="text-gray-400 mt-1.5 text-sm leading-relaxed">
-                          {notification.type === "returned" ? (
+                          {notification.type === "handover_otp" && (
                             <>
-                              <span className="font-medium text-indigo-300">{notification.sender}</span> marked{" "}
-                              <span className="font-semibold text-gray-200">"{notification.item_name}"</span> as returned.
+                              You paid <span className="font-semibold text-emerald-400">₹{notification.total_price}</span> (Rent + Deposit) to rent <span className="font-semibold text-gray-200">"{notification.item_name}"</span>. Meet the seller (<span className="text-indigo-300">{notification.sender}</span>) to verify the exchange.
                             </>
-                          ) : (
+                          )}
+                          {notification.type === "pending_handover" && (
                             <>
-                              <span className="font-medium text-indigo-300">{notification.sender}</span> rented your listing{" "}
-                              <span className="font-semibold text-gray-200">"{notification.item_name}"</span>
+                              Buyer <span className="font-medium text-indigo-300">{notification.sender}</span> paid <span className="font-semibold text-emerald-400">₹{notification.total_price}</span> to rent your listing <span className="font-semibold text-gray-200">"{notification.item_name}"</span>. Meet them to verify their handover OTP.
+                            </>
+                          )}
+                          {notification.type === "handover_complete_seller" && (
+                            <>
+                              Handover verified! Rent payout of <span className="font-bold text-emerald-400">₹{notification.total_price}</span> has been released to your account.
+                            </>
+                          )}
+                          {notification.type === "handover_complete_buyer" && (
+                            <>
+                              Handover complete! Your rental for <span className="font-semibold text-gray-200">"{notification.item_name}"</span> is now active. Security deposit of <span className="font-semibold text-emerald-400">₹{notification.total_price}</span> is held in escrow.
+                            </>
+                          )}
+                          {notification.type === "returned" && (
+                            <>
+                              Seller <span className="font-medium text-indigo-300">{notification.sender}</span> marked <span className="font-semibold text-gray-200">"{notification.item_name}"</span> as returned. Remaining security deposit refund: <span className="font-bold text-emerald-400">₹{notification.total_price}</span>.
+                            </>
+                          )}
+                          {notification.type === "late_fee_payout" && (
+                            <>
+                              Late fee payout of <span className="font-bold text-emerald-400">₹{notification.total_price}</span> was collected from the buyer for the late return of <span className="font-semibold text-gray-200">"{notification.item_name}"</span>.
+                            </>
+                          )}
+                          {notification.type === "college_escalation" && (
+                            <>
+                              ⚠️ Escalation: Student <span className="text-indigo-300">{notification.recipient}</span> failed to return <span className="font-semibold text-gray-200">"{notification.item_name}"</span>. Security deposit fully consumed by late fees.
+                            </>
+                          )}
+                          {!["handover_otp", "pending_handover", "handover_complete_seller", "handover_complete_buyer", "returned", "late_fee_payout", "college_escalation"].includes(notification.type) && (
+                            <>
+                              Update on <span className="font-semibold text-gray-200">"{notification.item_name}"</span> from <span className="text-indigo-300">{notification.sender}</span>.
                             </>
                           )}
                         </p>
