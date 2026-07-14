@@ -81,6 +81,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
           script: |
             # Navigate to the deployment folder
             cd ~/campustrade
@@ -109,7 +110,7 @@ jobs:
             # Pull latest containers and restart them
             docker compose pull
             docker compose down
-            docker compose up -d
+            docker compose up -d --no-build
 
             # Clean up old unused Docker images
             docker image prune -f
