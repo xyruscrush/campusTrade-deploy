@@ -11,6 +11,7 @@ export default function AddItem() {
     category: "",
     image: null,
     price_per_day: "",
+    security_deposit: "",
     mobile_number: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,6 +47,7 @@ export default function AddItem() {
     formDataToSend.append("description", formData.description);
     formDataToSend.append("category", formData.category);
     formDataToSend.append("price_per_day", formData.price_per_day);
+    formDataToSend.append("security_deposit", formData.security_deposit);
     formDataToSend.append("mobile_number", formData.mobile_number);
 
     if (formData.image) {
@@ -78,6 +80,7 @@ export default function AddItem() {
         category: "",
         image: null,
         price_per_day: "",
+        security_deposit: "",
         mobile_number: "",
       });
     } catch (error) {
@@ -164,6 +167,22 @@ export default function AddItem() {
                   value={formData.price_per_day}
                   onChange={handleChange}
                   placeholder="e.g. 50"
+                  className="w-full px-4 py-3.5 rounded-xl text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all placeholder-gray-600"
+                  style={{ background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)" }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                  Security Deposit (₹)
+                </label>
+                <input
+                  type="number"
+                  name="security_deposit"
+                  value={formData.security_deposit}
+                  onChange={handleChange}
+                  placeholder="e.g. 500"
                   className="w-full px-4 py-3.5 rounded-xl text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all placeholder-gray-600"
                   style={{ background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)" }}
                   required
