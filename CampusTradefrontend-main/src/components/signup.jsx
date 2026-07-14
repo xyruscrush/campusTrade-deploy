@@ -57,7 +57,12 @@ export default function SignupPage() {
       if (res.data.success) { 
         setIsOtpSent(true); 
         setTimer(30); 
-        setInfo("Check your email for the 6-digit verification code."); 
+        if (res.data.devOtp) {
+          setOtp(res.data.devOtp);
+          setInfo("OTP bypassed for testing. Code auto-filled!");
+        } else {
+          setInfo("Check your email for the 6-digit verification code."); 
+        }
       } else {
         setError(res.data.message);
       }
