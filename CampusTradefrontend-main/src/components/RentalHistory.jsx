@@ -35,6 +35,18 @@ function StatusBadge({ status }) {
   );
 }
 
+const getTimeRemaining = (handoverAt, days) => {
+  const deadline = new Date(new Date(handoverAt).getTime() + days * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const diffTime = deadline - now;
+  if (diffTime <= 0) {
+    const overdueDays = Math.ceil(Math.abs(diffTime) / (1000 * 60 * 60 * 24));
+    return `${overdueDays} ${overdueDays === 1 ? "day" : "days"} OVERDUE`;
+  }
+  const remainingDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return `${remainingDays} ${remainingDays === 1 ? "day" : "days"} remaining`;
+};
+
 function RentalCard({ rental, isSeller, onMarkReturned, onVerifyHandover, accessToken }) {
   const navigate = useNavigate();
   const [otpVal, setOtpVal] = useState("");
@@ -46,6 +58,22 @@ function RentalCard({ rental, isSeller, onMarkReturned, onVerifyHandover, access
     day: "numeric",
     year: "numeric",
   });
+
+  const handoverDateStr = rental.handoverAt
+    ? new Date(rental.handoverAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  const dueDateStr = rental.handoverAt
+    ? new Date(new Date(rental.handoverAt).getTime() + rental.days * 24 * 60 * 60 * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : null;
+
+  const returnedDateStr = rental.returnedAt
+    ? new Date(rental.returnedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  const remainingStr = rental.status === "active" && rental.handoverAt
+    ? getTimeRemaining(rental.handoverAt, rental.days)
+    : null;
 
   const handleVerify = async () => {
     if (!otpVal) return setError("Enter OTP");
@@ -90,51 +118,92 @@ function RentalCard({ rental, isSeller, onMarkReturned, onVerifyHandover, access
           <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-3">
             <span className="flex items-center gap-1">
               <FiCalendar size={11} />
-              {date}
+              Ordered: {date}
             </span>
             <span className="flex items-center gap-1">
               <FiClock size={11} />
-              {rental.days} {rental.days === 1 ? "day" : "days"}
+              Duration: {rental.days} {rental.days === 1 ? "day" : "days"}
             </span>
-            <span className="font-medium text-emerald-400">₹{rental.total_price}</span>
+            <span className="font-medium text-emerald-400">Total: ₹{rental.total_price}</span>
           </div>
-          <p className="text-xs text-gray-600 mb-2">
-            {isSeller ? `Rented by: ${rental.buyer}` : `From: ${rental.seller}`}
+          <p className="text-xs text-gray-400 mb-3">
+            {isSeller ? `Rented by: ${rental.buyer}` : `Seller: ${rental.seller}`}
           </p>
 
-          {/* Buyer view of OTP */}
-          {!isSeller && rental.status === "pending_handover" && (
-            <div className="mt-3 p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 text-xs text-indigo-300">
-              <p className="font-semibold mb-1">🔑 Handover Verification Code: <span className="font-mono text-sm bg-indigo-500/20 px-2 py-0.5 rounded text-white font-bold">{rental.handover_otp || "1234"}</span></p>
-              <p className="text-gray-400">Share this code with the seller when you receive the item to complete the handover.</p>
-            </div>
-          )}
+          {/* Detailed Status & Time Messaging */}
+          <div className="mt-3 p-3.5 rounded-xl border bg-gray-900/40 border-white/5 space-y-2">
+            {rental.status === "pending_handover" && (
+              <>
+                <p className="text-xs font-semibold text-amber-400">
+                  {isSeller ? "Awaiting OTP Verification" : "Awaiting Meetup & Handover"}
+                </p>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  {isSeller
+                    ? "Meet the buyer on campus to hand over the item. Collect their 4-digit verification code and enter it below to activate the rental."
+                    : "Meet the seller on campus to pick up the item. Show them the verification code below to activate your rental."}
+                </p>
+                {!isSeller && (
+                  <div className="mt-2 p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-center">
+                    <p className="text-xs text-indigo-300 font-semibold">🔑 YOUR HANDOVER OTP: <span className="font-mono text-sm bg-indigo-500/20 px-2 py-0.5 rounded text-white font-bold">{rental.handover_otp || "1234"}</span></p>
+                  </div>
+                )}
+                {isSeller && (
+                  <div className="mt-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                    <p className="text-xs text-amber-300 font-semibold mb-2">Enter Buyer's Handover OTP:</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="4-digit OTP"
+                        maxLength={4}
+                        value={otpVal}
+                        onChange={(e) => setOtpVal(e.target.value.replace(/\D/g, ""))}
+                        className="bg-transparent border border-white/10 rounded px-2.5 py-1 text-white font-bold text-center w-24 outline-none focus:border-amber-500/50"
+                      />
+                      <button
+                        onClick={handleVerify}
+                        disabled={verifying}
+                        className="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-800 text-slate-900 font-bold px-3 py-1 rounded transition-all text-xs"
+                      >
+                        {verifying ? "Verifying..." : "Verify"}
+                      </button>
+                    </div>
+                    {error && <p className="text-red-400 mt-1 font-semibold text-[11px]">{error}</p>}
+                    <p className="text-gray-500 mt-1 text-[9px]">*(Mock OTP: 1234)*</p>
+                  </div>
+                )}
+              </>
+            )}
 
-          {/* Seller input for OTP */}
-          {isSeller && rental.status === "pending_handover" && (
-            <div className="mt-3 p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-xs text-amber-300">
-              <p className="font-semibold mb-2">Verify Handover OTP</p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="4-digit OTP"
-                  maxLength={4}
-                  value={otpVal}
-                  onChange={(e) => setOtpVal(e.target.value.replace(/\D/g, ""))}
-                  className="bg-transparent border border-white/10 rounded px-2.5 py-1 text-white font-bold text-center w-24 outline-none focus:border-amber-500/50"
-                />
-                <button
-                  onClick={handleVerify}
-                  disabled={verifying}
-                  className="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-800 text-slate-900 font-bold px-3 py-1 rounded transition-all"
-                >
-                  {verifying ? "Verifying..." : "Verify"}
-                </button>
-              </div>
-              {error && <p className="text-red-400 mt-1 font-semibold">{error}</p>}
-              <p className="text-gray-500 mt-1 text-[10px]">*(Mock OTP: 1234)*</p>
-            </div>
-          )}
+            {rental.status === "active" && (
+              <>
+                <p className="text-xs font-semibold text-emerald-400">
+                  {isSeller ? "Rental Active & Out" : "Rental Active & In Use"}
+                </p>
+                <div className="text-xs text-gray-400 space-y-1">
+                  <p>📅 Handed over on: <span className="text-gray-300 font-medium">{handoverDateStr}</span></p>
+                  <p>🚨 Due date: <span className="text-gray-300 font-medium">{dueDateStr}</span></p>
+                  <p className="font-semibold mt-1" style={{ color: remainingStr.includes("OVERDUE") ? "#ef4444" : "#10b981" }}>
+                    Time Remaining: {remainingStr}
+                  </p>
+                </div>
+              </>
+            )}
+
+            {rental.status === "returned" && (
+              <>
+                <p className="text-xs font-semibold text-indigo-400">
+                  Returned & Complete
+                </p>
+                <div className="text-xs text-gray-400 space-y-1">
+                  <p>📅 Handed over on: <span className="text-gray-300">{handoverDateStr}</span></p>
+                  <p>✅ Returned on: <span className="text-gray-300">{returnedDateStr}</span></p>
+                  {rental.late_fee > 0 && (
+                    <p className="text-red-400 font-semibold">⚠️ Late Penalty Charged: ₹{rental.late_fee}</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
       <div
