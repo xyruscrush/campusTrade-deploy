@@ -710,10 +710,23 @@ app.post("/return-item/:rentalId", authenticate, async (req, res) => {
       const dailyPrice = parseFloat(rental.price_per_day);
       const securityDeposit = parseFloat(rental.security_deposit || "0");
       lateFee = lateDays * (1.5 * dailyPrice);
-      if (lateFee > securityDeposit) {
+      if (lateFee >= securityDeposit) {
         lateFee = securityDeposit;
         // Flag the buyer
         await User.updateOne({ email: rental.buyer }, { status: "flagged" });
+        
+        // Post an escalation alert to the college notification feed
+        await new Notification({
+          recipient: rental.buyer,
+          sender: "system",
+          item_name: rental.item_name,
+          price: rental.price_per_day,
+          days: rental.days,
+          total_price: lateFee.toString(),
+          rental_id: rental._id.toString(),
+          type: "college_escalation",
+          is_college_escalation: true,
+        }).save();
       }
     }
 
