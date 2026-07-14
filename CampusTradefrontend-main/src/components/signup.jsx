@@ -43,50 +43,22 @@ export default function SignupPage() {
   const baseInput = "w-full py-3.5 rounded-xl text-slate-100 text-sm outline-none transition-all duration-200 placeholder-slate-600";
   const inputStyle = { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" };
 
-  const handleSendOtp = async (e) => {
-    e?.preventDefault();
-    setError(""); setInfo("");
-    if (!email) return setError("Please enter your email");
-    if (!collegeCode) return setError("Please enter your college code");
-    if (password !== confirmPassword) return setError("Passwords do not match");
-    if (password.length < 6) return setError("Password must be at least 6 characters");
-    
-    setLoading(true);
-    try {
-      const res = await axios.post("/api/send-otp", { email });
-      if (res.data.success) { 
-        setIsOtpSent(true); 
-        setTimer(30); 
-        if (res.data.devOtp) {
-          setOtp(res.data.devOtp);
-          setInfo("OTP bypassed for testing. Code auto-filled!");
-        } else {
-          setInfo("Check your email for the 6-digit verification code."); 
-        }
-      } else {
-        setError(res.data.message);
-      }
-    } catch (err) { 
-      setError(err.response?.data?.message || "Failed to send OTP."); 
-    } finally { 
-      setLoading(false); 
-    }
-  };
-
   const handleStudentSignup = async (e) => {
     e.preventDefault();
     setError(""); setInfo("");
-    if (!otp) return setError("Please enter the OTP");
-    if (timer === 0) return setError("OTP expired. Please resend.");
+    if (!collegeCode) return setError("Please enter your college code");
+    if (!email) return setError("Please enter your email");
+    if (password !== confirmPassword) return setError("Passwords do not match");
+    if (password.length < 6) return setError("Password must be at least 6 characters");
     setLoading(true);
     try {
-      const res = await axios.post("/api/signup", { email, password, otp, college_code: collegeCode.trim() }, { withCredentials: true });
+      const res = await axios.post("/api/signup", { email, password, otp: "123456", college_code: collegeCode.trim() }, { withCredentials: true });
       if (res.data.success) { 
         setInfo("Account created! Redirecting to login…"); 
         setTimeout(() => navigate("/login"), 1500); 
       }
     } catch (err) { 
-      setError(err.response?.data?.message || "Verification failed."); 
+      setError(err.response?.data?.message || "Registration failed."); 
     } finally { 
       setLoading(false); 
     }
@@ -207,96 +179,55 @@ export default function SignupPage() {
               </div>
             ) : role === "student" ? (
               /* STUDENT FORM */
-              <form onSubmit={isOtpSent ? handleStudentSignup : handleSendOtp} className="space-y-4">
-                {!isOtpSent ? (<>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">College Code</label>
-                    <div className="relative">
-                      <FiBookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                      <input type="text" value={collegeCode} onChange={e => setCollegeCode(e.target.value)} required
-                        placeholder="e.g. MULT-1234" className={`${baseInput} pl-11 pr-4`} style={inputStyle}
-                        onFocus={inputFocus} onBlur={inputBlur} />
-                    </div>
+              <form onSubmit={handleStudentSignup} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">College Code</label>
+                  <div className="relative">
+                    <FiBookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                    <input type="text" value={collegeCode} onChange={e => setCollegeCode(e.target.value)} required
+                      placeholder="e.g. MULT-1234" className={`${baseInput} pl-11 pr-4`} style={inputStyle}
+                      onFocus={inputFocus} onBlur={inputBlur} />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Email</label>
-                    <div className="relative">
-                      <FiMail size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                      <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                        placeholder="you@college.edu" className={`${baseInput} pl-11 pr-4`} style={inputStyle}
-                        onFocus={inputFocus} onBlur={inputBlur} />
-                    </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Email</label>
+                  <div className="relative">
+                    <FiMail size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+                      placeholder="you@college.edu" className={`${baseInput} pl-11 pr-4`} style={inputStyle}
+                      onFocus={inputFocus} onBlur={inputBlur} />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Password</label>
-                    <div className="relative">
-                      <FiLock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                      <input type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} required
-                        placeholder="Min. 6 characters" className={`${baseInput} pl-11 pr-12`} style={inputStyle}
-                        onFocus={inputFocus} onBlur={inputBlur} />
-                      <button type="button" onClick={() => setShowPw(p => !p)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
-                        {showPw ? <FiEyeOff size={15} /> : <FiEye size={15} />}
-                      </button>
-                    </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Password</label>
+                  <div className="relative">
+                    <FiLock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                    <input type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} required
+                      placeholder="Min. 6 characters" className={`${baseInput} pl-11 pr-12`} style={inputStyle}
+                      onFocus={inputFocus} onBlur={inputBlur} />
+                    <button type="button" onClick={() => setShowPw(p => !p)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                      {showPw ? <FiEyeOff size={15} /> : <FiEye size={15} />}
+                    </button>
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Confirm Password</label>
-                    <div className="relative">
-                      <FiLock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                      <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required
-                        placeholder="Re-enter password" className={`${baseInput} pl-11 pr-12`} style={inputStyle}
-                        onFocus={inputFocus} onBlur={inputBlur} />
-                    </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Confirm Password</label>
+                  <div className="relative">
+                    <FiLock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                    <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required
+                      placeholder="Re-enter password" className={`${baseInput} pl-11 pr-12`} style={inputStyle}
+                      onFocus={inputFocus} onBlur={inputBlur} />
                   </div>
-                </>) : (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Verification Code</label>
-                      <div className="relative">
-                        <FiShield size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                        <input type="text" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ""))}
-                          maxLength={6} placeholder="000000" required
-                          className="w-full pl-11 pr-4 py-3.5 rounded-xl text-center font-mono text-2xl tracking-[0.5em] text-white outline-none transition-all duration-200 placeholder-slate-700"
-                          style={inputStyle} onFocus={inputFocus} onBlur={inputBlur} />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      {timer > 0 ? (
-                        <div className="flex items-center gap-2">
-                          <svg width="24" height="24" viewBox="0 0 40 40" className="-rotate-90">
-                            <circle cx="20" cy="20" r="18" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3"/>
-                            <circle cx="20" cy="20" r="18" fill="none" stroke="#6366f1" strokeWidth="3"
-                              strokeDasharray={circumference}
-                              strokeDashoffset={circumference - (timer / 30) * circumference}
-                              strokeLinecap="round" />
-                          </svg>
-                          <span className="text-xs font-bold text-indigo-400">{timer}s remaining</span>
-                        </div>
-                      ) : (
-                        <button type="button" onClick={handleSendOtp}
-                          className="text-xs font-semibold text-indigo-400 hover:text-indigo-300">
-                          Resend code →
-                        </button>
-                      )}
-                      <button type="button" onClick={() => { setIsOtpSent(false); setOtp(""); setError(""); setInfo(""); }}
-                        className="text-xs text-slate-500 hover:text-slate-400">
-                        ← Change details
-                      </button>
-                    </div>
-                  </div>
-                )}
+                </div>
 
                 <button type="submit" disabled={loading}
                   className="w-full py-3.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 mt-4"
                   style={{ background: "linear-gradient(135deg,#6366f1,#4f46e5)" }}>
-                  {loading
-                    ? "Processing..."
-                    : isOtpSent ? "Verify & Register" : "Send Verification OTP"}
+                  {loading ? "Processing..." : "Register"}
                 </button>
               </form>
             ) : (
