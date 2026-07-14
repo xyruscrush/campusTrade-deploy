@@ -345,8 +345,12 @@ export default function RentalHistory() {
   };
 
   const handleVerifyHandoverSuccess = (rentalId) => {
+    const nowStr = new Date().toISOString();
     setSellerRentals((prev) =>
-      prev.map((r) => (r._id === rentalId ? { ...r, status: "active" } : r))
+      prev.map((r) => (r._id === rentalId ? { ...r, status: "active", handoverAt: nowStr } : r))
+    );
+    setBuyerRentals((prev) =>
+      prev.map((r) => (r._id === rentalId ? { ...r, status: "active", handoverAt: nowStr } : r))
     );
     showToast("Handover verified successfully! Rental is now active.");
   };

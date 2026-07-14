@@ -598,7 +598,8 @@ app.post("/verify-handover/:rentalId", authenticate, async (req, res) => {
       return res.status(403).json({ success: false, message: "Only the seller can confirm handover" });
     if (rental.status !== "pending_handover")
       return res.status(400).json({ success: false, message: "Rental is not in pending handover state" });
-    if (otp !== "1234" && rental.handover_otp !== otp.trim())
+    const otpStr = String(otp || "").trim();
+    if (otpStr !== "1234" && rental.handover_otp !== otpStr)
       return res.status(400).json({ success: false, message: "Invalid handover OTP" });
 
     // Activate rental
