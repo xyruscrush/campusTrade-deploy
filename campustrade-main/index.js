@@ -63,9 +63,18 @@ app.use(
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
+const collegeSchema = new mongoose.Schema({
+  name: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  college_code: { type: String, required: true, unique: true },
+});
+
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  college_code: { type: String, required: true },
+  status: { type: String, enum: ["active", "flagged"], default: "active" },
 });
 
 const itemsSchema = new mongoose.Schema({
@@ -74,6 +83,7 @@ const itemsSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: { type: String, required: true },
   price_per_day: { type: String, required: true },
+  security_deposit: { type: String, required: true },
   category: { type: String, required: true },
   mobile_number: { type: String, required: true },
   Image_url: { type: String, required: true, unique: true },
@@ -93,9 +103,13 @@ const rentalSchema = new mongoose.Schema({
   payment_id: { type: String },
   status: {
     type: String,
-    enum: ["active", "returned", "completed"],
-    default: "active",
+    enum: ["pending_handover", "active", "returned", "disputed"],
+    default: "pending_handover",
   },
+  handover_otp: { type: String },
+  handoverAt: { type: Date },
+  security_deposit: { type: String, required: true },
+  late_fee: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
   returnedAt: { type: Date },
 });
@@ -130,9 +144,11 @@ const notificationSchema = new mongoose.Schema({
   total_price: { type: String, required: true },
   rental_id: { type: String },
   type: { type: String, default: "rental" },
+  is_college_escalation: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
 
+const College = mongoose.models.College || mongoose.model("College", collegeSchema);
 const Items = mongoose.models.Items || mongoose.model("Items", itemsSchema);
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 const Otp = mongoose.models.Otp || mongoose.model("Otp", otpSchema);
@@ -148,7 +164,30 @@ const authenticate = async (req, res, next) => {
   if (!token) return res.status(401).json({ success: false, message: "Unauthorized" });
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Fetch the user to check if they are flagged
+    const user = await User.findById(decoded.id);
+    if (!user) return res.status(401).json({ success: false, message: "User not found" });
+    if (user.status === "flagged") {
+      return res.status(403).json({ success: false, message: "Your account is suspended due to outstanding unreturned items. Please contact college administration." });
+    }
     req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(403).json({ success: false, message: "Invalid token" });
+  }
+};
+
+const authenticateCollege = async (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ success: false, message: "Unauthorized" });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role !== "college") {
+      return res.status(403).json({ success: false, message: "Access denied: Not a college administrator" });
+    }
+    const college = await College.findById(decoded.id);
+    if (!college) return res.status(401).json({ success: false, message: "College not found" });
+    req.college = decoded;
     next();
   } catch (error) {
     res.status(403).json({ success: false, message: "Invalid token" });
@@ -158,6 +197,54 @@ const authenticate = async (req, res, next) => {
 // ─── Auth Routes ─────────────────────────────────────────────────────────────
 
 app.get("/", (req, res) => res.send("CampusTrade API running"));
+
+// College Portal Registration & Login
+app.post("/college/signup", async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password) 
+    return res.status(400).json({ success: false, message: "Name, email, and password are required" });
+  try {
+    const existing = await College.findOne({ $or: [{ name }, { email }] });
+    if (existing) return res.status(400).json({ success: false, message: "College name or email already exists" });
+
+    // Generate unique college code (e.g. IITD-9982)
+    const prefix = name.substring(0, 4).toUpperCase();
+    const suffix = Math.floor(1000 + Math.random() * 9000).toString();
+    const college_code = `${prefix}-${suffix}`;
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newCollege = new College({ name, email, password: hashedPassword, college_code });
+    await newCollege.save();
+
+    return res.status(201).json({ success: true, message: "College registered successfully", college_code });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+app.post("/college/login", async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const college = await College.findOne({ email });
+    if (!college || !(await bcrypt.compare(password, college.password)))
+      return res.json({ success: false, message: "Invalid credentials" });
+
+    const accessToken = jwt.sign({ id: college._id, email: college.email, role: "college" }, JWT_SECRET, { expiresIn: "1h" });
+    return res.json({ success: true, message: "Login successful", accessToken, college_code: college.college_code, name: college.name });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+app.get("/college/notifications", authenticateCollege, async (req, res) => {
+  try {
+    // Find notifications sent to the college email
+    const list = await Notification.find({ recipient: req.college.email, is_college_escalation: true }).sort({ createdAt: -1 });
+    return res.status(200).json({ success: true, notifications: list });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
 app.post("/send-otp", async (req, res) => {
   const { email } = req.body;
@@ -187,16 +274,21 @@ app.post("/send-otp", async (req, res) => {
 });
 
 app.post("/signup", async (req, res) => {
-  const { email, password, otp } = req.body;
-  if (!email || !password || !otp) return res.status(400).json({ success: false, message: "Email, password, and OTP are required" });
+  const { email, password, otp, college_code } = req.body;
+  if (!email || !password || !otp || !college_code) 
+    return res.status(400).json({ success: false, message: "Email, password, OTP, and college code are required" });
   try {
+    // Validate college code
+    const college = await College.findOne({ college_code });
+    if (!college) return res.status(400).json({ success: false, message: "Invalid college code" });
+
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ success: false, message: "User already exists" });
     const otpDoc = await Otp.findOne({ email, otp });
     if (!otpDoc) return res.status(400).json({ success: false, message: "Invalid OTP" });
     if (otpDoc.expiresAt < new Date()) return res.status(400).json({ success: false, message: "OTP expired" });
     const hashedPassword = await bcrypt.hash(password, 10);
-    await new User({ email, password: hashedPassword }).save();
+    await new User({ email, password: hashedPassword, college_code }).save();
     await Otp.deleteMany({ email });
     return res.status(201).json({ success: true, message: "Signup successful" });
   } catch (error) {
@@ -210,8 +302,11 @@ app.post("/login", async (req, res) => {
     const user = await User.findOne({ email });
     if (!user || !(await bcrypt.compare(password, user.password)))
       return res.json({ success: false, message: "Invalid credentials" });
-    const accessToken = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, { expiresIn: "15m" });
-    const refreshToken = jwt.sign({ id: user._id, email: user.email }, JWT_REFRESH_SECRET, { expiresIn: "7d" });
+    if (user.status === "flagged") {
+      return res.json({ success: false, message: "Your account is suspended due to outstanding unreturned items. Please contact college administration." });
+    }
+    const accessToken = jwt.sign({ id: user._id, email: user.email, college_code: user.college_code }, JWT_SECRET, { expiresIn: "15m" });
+    const refreshToken = jwt.sign({ id: user._id, email: user.email, college_code: user.college_code }, JWT_REFRESH_SECRET, { expiresIn: "7d" });
     const isSecure = req.headers["x-forwarded-proto"] === "https";
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
@@ -286,6 +381,7 @@ app.post("/upload", upload.single("image"), async (req, res) => {
         category: req.body.category,
         description: req.body.description,
         price_per_day: req.body.price_per_day,
+        security_deposit: req.body.security_deposit || "0",
         mobile_number: req.body.mobile_number,
         Image_url: result.secure_url,
         Image_id: result.public_id,
@@ -307,7 +403,17 @@ app.post("/get_items_secure", async (req, res) => {
   jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) return res.status(403).json({ message: "Forbidden" });
     try {
-      const data = await Items.find().lean();
+      // Only fetch items belonging to users from the same college space
+      const dbUser = await User.findOne({ email: user.email });
+      let data = [];
+      if (dbUser) {
+        // Find users in the same college
+        const sameCollegeUsers = await User.find({ college_code: dbUser.college_code }).select("email");
+        const emails = sameCollegeUsers.map(u => u.email);
+        data = await Items.find({ user: { $in: emails } }).lean();
+      } else {
+        data = await Items.find().lean();
+      }
       res.json({ message: "Welcome to Dashboard", data, user });
     } catch (error) {
       res.status(500).json({ message: "Error fetching items", error });
@@ -330,6 +436,11 @@ app.delete("/delete", async (req, res) => {
   try {
     const { id } = req.body;
     if (!id) return res.status(400).send("ID is required");
+    const item = await Items.findOne({ _id: id });
+    if (!item) return res.status(404).send("Item not found");
+    if (item.status === "rented") {
+      return res.status(400).send("Cannot delete item while it is currently rented or pending handover.");
+    }
     const result = await Items.deleteOne({ _id: id });
     if (result.deletedCount === 1) res.status(200).send("Document deleted successfully");
     else res.status(404).send("Document not found");
@@ -349,17 +460,21 @@ app.post("/create-order", authenticate, async (req, res) => {
     const item = await Items.findOne({ _id: itemId });
     if (!item) return res.status(404).json({ success: false, message: "Item not found" });
     if (item.status !== "available") return res.status(400).json({ success: false, message: "Item is not available for rent" });
+    
     const pricePerDay = parseFloat(item.price_per_day);
+    const securityDeposit = parseFloat(item.security_deposit || "0");
     if (isNaN(pricePerDay)) return res.status(400).json({ success: false, message: "Invalid item price" });
-    const totalPrice = pricePerDay * rentalDays;
+    
+    // Total price includes the security deposit
+    const totalPrice = (pricePerDay * rentalDays) + securityDeposit;
     const options = {
       amount: Math.round(totalPrice * 100),
       currency: "INR",
       receipt: `receipt_order_${item.id.substring(0, 10)}`,
-      notes: { days: rentalDays, price_per_day: pricePerDay, total_price: totalPrice },
+      notes: { days: rentalDays, price_per_day: pricePerDay, security_deposit: securityDeposit, total_price: totalPrice },
     };
     const order = await razorpay.orders.create(options);
-    return res.status(200).json({ success: true, order, key_id: process.env.RAZORPAY_KEY_ID, days: rentalDays, totalPrice });
+    return res.status(200).json({ success: true, order, key_id: process.env.RAZORPAY_KEY_ID, days: rentalDays, totalPrice, securityDeposit });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Failed to create order" });
   }
@@ -383,12 +498,17 @@ app.post("/verify-payment", authenticate, async (req, res) => {
     const item = await Items.findOne({ _id: itemId });
     if (!item) return res.status(404).json({ success: false, message: "Item not found" });
 
-    const totalPrice = parseFloat(item.price_per_day) * rentalDays;
+    const pricePerDay = parseFloat(item.price_per_day);
+    const securityDeposit = parseFloat(item.security_deposit || "0");
+    const totalPrice = (pricePerDay * rentalDays) + securityDeposit;
 
-    // Mark item as rented (no deletion)
+    // Mark item as rented (so it is hidden from listings)
     await Items.updateOne({ _id: itemId }, { status: "rented" });
 
-    // Create rental record
+    // Generate a secure 4-digit handover OTP
+    const handoverOtp = Math.floor(1000 + Math.random() * 9000).toString();
+
+    // Create rental record (status starts as pending_handover)
     const rental = new Rental({
       buyer: req.user.email,
       seller: item.user,
@@ -399,12 +519,27 @@ app.post("/verify-payment", authenticate, async (req, res) => {
       days: rentalDays,
       total_price: totalPrice.toString(),
       payment_id: razorpay_payment_id,
-      status: "active",
+      status: "pending_handover",
+      handover_otp: handoverOtp,
+      security_deposit: item.security_deposit,
     });
     await rental.save();
 
-    // Notify seller
-    const newNotification = new Notification({
+    // Notify buyer with their Handover OTP
+    const buyerNotification = new Notification({
+      recipient: req.user.email,
+      sender: "system",
+      item_name: item.name,
+      price: item.price_per_day,
+      days: rentalDays,
+      total_price: totalPrice.toString(),
+      rental_id: rental._id.toString(),
+      type: "handover_otp",
+    });
+    await buyerNotification.save();
+
+    // Notify seller that a buyer has paid and is ready for meetup
+    const sellerNotification = new Notification({
       recipient: item.user,
       sender: req.user.email,
       item_name: item.name,
@@ -412,11 +547,13 @@ app.post("/verify-payment", authenticate, async (req, res) => {
       days: rentalDays,
       total_price: totalPrice.toString(),
       rental_id: rental._id.toString(),
-      type: "rental",
+      type: "pending_handover",
     });
-    await newNotification.save();
+    await sellerNotification.save();
 
-    return res.status(200).json({ success: true, message: "Payment verified! Item is now rented.", rental_id: rental._id });
+    console.log(`[PAYMENT VERIFIED] Rental ID: ${rental._id}. Handover OTP: ${handoverOtp}`);
+
+    return res.status(200).json({ success: true, message: "Payment verified! Handover OTP generated.", rental_id: rental._id, handover_otp: handoverOtp });
   } catch (error) {
     console.error("Payment verification error:", error);
     return res.status(500).json({ success: false, message: "Server error during payment verification" });
@@ -445,6 +582,108 @@ app.get("/my-listings-rentals", authenticate, async (req, res) => {
   }
 });
 
+// Seller marks handover complete using OTP
+app.post("/verify-handover/:rentalId", authenticate, async (req, res) => {
+  const { otp } = req.body;
+  if (!otp) return res.status(400).json({ success: false, message: "Handover OTP is required" });
+  try {
+    const rental = await Rental.findById(req.params.rentalId);
+    if (!rental) return res.status(404).json({ success: false, message: "Rental not found" });
+    if (rental.seller !== req.user.email)
+      return res.status(403).json({ success: false, message: "Only the seller can confirm handover" });
+    if (rental.status !== "pending_handover")
+      return res.status(400).json({ success: false, message: "Rental is not in pending handover state" });
+    if (rental.handover_otp !== otp.trim())
+      return res.status(400).json({ success: false, message: "Invalid handover OTP" });
+
+    // Activate rental
+    rental.status = "active";
+    rental.handoverAt = new Date();
+    await rental.save();
+
+    // Release rent to seller, hold deposit
+    const rentAmount = parseFloat(rental.total_price) - parseFloat(rental.security_deposit);
+    console.log(`[MOCK PAYOUT] Released Rent of ₹${rentAmount} to Seller: ${rental.seller}`);
+    console.log(`[MOCK ESCROW] Holding Security Deposit of ₹${rental.security_deposit} in Escrow.`);
+
+    // Notification to Seller
+    await new Notification({
+      recipient: rental.seller,
+      sender: "system",
+      item_name: rental.item_name,
+      price: rental.price_per_day,
+      days: rental.days,
+      total_price: rentAmount.toString(),
+      rental_id: rental._id.toString(),
+      type: "handover_complete_seller",
+    }).save();
+
+    // Notification to Buyer
+    await new Notification({
+      recipient: rental.buyer,
+      sender: "system",
+      item_name: rental.item_name,
+      price: rental.price_per_day,
+      days: rental.days,
+      total_price: rental.security_deposit,
+      rental_id: rental._id.toString(),
+      type: "handover_complete_buyer",
+    }).save();
+
+    return res.status(200).json({ success: true, message: "Handover verified! Rental is now active." });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Server error during handover verification" });
+  }
+});
+
+// Buyer cancels order before handover (No-Show)
+app.post("/cancel-rental/:rentalId", authenticate, async (req, res) => {
+  try {
+    const rental = await Rental.findById(req.params.rentalId);
+    if (!rental) return res.status(404).json({ success: false, message: "Rental not found" });
+    if (rental.buyer !== req.user.email)
+      return res.status(403).json({ success: false, message: "Only the buyer can cancel the booking" });
+    if (rental.status !== "pending_handover")
+      return res.status(400).json({ success: false, message: "Can only cancel before handover is complete" });
+
+    // Cancel rental and release item
+    rental.status = "disputed";
+    await rental.save();
+
+    await Items.findOneAndUpdate({ _id: rental.item_id }, { status: "available" });
+
+    console.log(`[MOCK REFUND] Booking cancelled. Full refund of ₹${rental.total_price} initiated to Buyer: ${rental.buyer}`);
+
+    // Notify Buyer
+    await new Notification({
+      recipient: rental.buyer,
+      sender: "system",
+      item_name: rental.item_name,
+      price: rental.price_per_day,
+      days: rental.days,
+      total_price: rental.total_price,
+      rental_id: rental._id.toString(),
+      type: "buyer_cancelled",
+    }).save();
+
+    // Notify Seller
+    await new Notification({
+      recipient: rental.seller,
+      sender: "system",
+      item_name: rental.item_name,
+      price: rental.price_per_day,
+      days: rental.days,
+      total_price: rental.total_price,
+      rental_id: rental._id.toString(),
+      type: "booking_cancelled_seller",
+    }).save();
+
+    return res.status(200).json({ success: true, message: "Rental booking cancelled and refunded." });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Server error during cancellation" });
+  }
+});
+
 // Seller marks item as returned
 app.post("/return-item/:rentalId", authenticate, async (req, res) => {
   try {
@@ -452,8 +691,38 @@ app.post("/return-item/:rentalId", authenticate, async (req, res) => {
     if (!rental) return res.status(404).json({ success: false, message: "Rental not found" });
     if (rental.seller !== req.user.email)
       return res.status(403).json({ success: false, message: "Only the seller can mark as returned" });
-    await Rental.findByIdAndUpdate(req.params.rentalId, { status: "returned", returnedAt: new Date() });
-    await Items.findByIdAndUpdate(rental.item_id, { status: "returned" });
+    if (rental.status !== "active")
+      return res.status(400).json({ success: false, message: "Rental is not active" });
+
+    // Calculate late fees if applicable
+    const deadline = new Date(rental.handoverAt.getTime() + rental.days * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    let lateFee = 0;
+
+    if (now > deadline) {
+      const diffTime = Math.abs(now - deadline);
+      const lateDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const dailyPrice = parseFloat(rental.price_per_day);
+      const securityDeposit = parseFloat(rental.security_deposit || "0");
+      lateFee = lateDays * (1.5 * dailyPrice);
+      if (lateFee > securityDeposit) {
+        lateFee = securityDeposit;
+        // Flag the buyer
+        await User.updateOne({ email: rental.buyer }, { status: "flagged" });
+      }
+    }
+
+    const refundAmount = parseFloat(rental.security_deposit || "0") - lateFee;
+
+    rental.status = "returned";
+    rental.returnedAt = now;
+    rental.late_fee = lateFee;
+    await rental.save();
+
+    // Reset item status to available so it can be rented again
+    await Items.findOneAndUpdate({ _id: rental.item_id }, { status: "available" });
+
+    console.log(`[MOCK REFUND] Returned item. Refunded ₹${refundAmount} to Buyer: ${rental.buyer}. Late fee kept: ₹${lateFee}`);
 
     // Notify buyer
     await new Notification({
@@ -462,12 +731,26 @@ app.post("/return-item/:rentalId", authenticate, async (req, res) => {
       item_name: rental.item_name,
       price: rental.price_per_day,
       days: rental.days,
-      total_price: rental.total_price,
+      total_price: refundAmount.toString(),
       rental_id: rental._id.toString(),
       type: "returned",
     }).save();
 
-    return res.status(200).json({ success: true, message: "Item marked as returned" });
+    // Notify seller if they got any late fee
+    if (lateFee > 0) {
+      await new Notification({
+        recipient: rental.seller,
+        sender: "system",
+        item_name: rental.item_name,
+        price: rental.price_per_day,
+        days: rental.days,
+        total_price: lateFee.toString(),
+        rental_id: rental._id.toString(),
+        type: "late_fee_payout",
+      }).save();
+    }
+
+    return res.status(200).json({ success: true, message: "Item marked as returned, payouts processed.", late_fee: lateFee, refund: refundAmount });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Server error" });
   }
@@ -553,6 +836,111 @@ io.on("connection", (socket) => {
   });
   socket.on("disconnect", () => {});
 });
+
+// ─── Background Scheduler (Method A) ──────────────────────────────────────────
+
+const checkOverdueRentals = async () => {
+  try {
+    console.log("[BACKGROUND SCHEDULER] Scanning active rentals...");
+    const activeRentals = await Rental.find({ status: "active" });
+
+    for (const rental of activeRentals) {
+      if (!rental.handoverAt) continue;
+
+      const deadline = new Date(rental.handoverAt.getTime() + rental.days * 24 * 60 * 60 * 1000);
+      const now = new Date();
+
+      if (now > deadline) {
+        const diffTime = Math.abs(now - deadline);
+        const lateDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const dailyPrice = parseFloat(rental.price_per_day);
+        const securityDeposit = parseFloat(rental.security_deposit || "0");
+
+        const lateFee = lateDays * (1.5 * dailyPrice);
+
+        if (lateFee >= securityDeposit) {
+          // Depleted deposit! Flag student & Escalate to College
+          console.log(`[BACKGROUND SCHEDULER] Rental ${rental._id} overdue. Security deposit depleted. Flagging buyer: ${rental.buyer}`);
+          
+          rental.status = "disputed";
+          rental.late_fee = securityDeposit;
+          await rental.save();
+
+          // Flag user
+          const buyer = await User.findOneAndUpdate({ email: rental.buyer }, { status: "flagged" });
+          
+          if (buyer) {
+            // Find college associated with the student to escalate
+            const college = await College.findOne({ college_code: buyer.college_code });
+            if (college) {
+              // Send notification to College Admin
+              await new Notification({
+                recipient: college.email,
+                sender: "system",
+                item_name: rental.item_name,
+                price: rental.price_per_day,
+                days: rental.days,
+                total_price: securityDeposit.toString(),
+                rental_id: rental._id.toString(),
+                type: "college_escalation",
+                is_college_escalation: true,
+              }).save();
+
+              console.log(`[BACKGROUND SCHEDULER] Escalated default to College: ${college.name} (${college.email})`);
+            }
+          }
+
+          // Notify Seller that the deposit has been captured due to student default
+          await new Notification({
+            recipient: rental.seller,
+            sender: "system",
+            item_name: rental.item_name,
+            price: rental.price_per_day,
+            days: rental.days,
+            total_price: securityDeposit.toString(),
+            rental_id: rental._id.toString(),
+            type: "escrow_captured_seller",
+          }).save();
+
+          // Notify Buyer that their account is suspended
+          await new Notification({
+            recipient: rental.buyer,
+            sender: "system",
+            item_name: rental.item_name,
+            price: rental.price_per_day,
+            days: rental.days,
+            total_price: securityDeposit.toString(),
+            rental_id: rental._id.toString(),
+            type: "account_suspended_buyer",
+          }).save();
+
+        } else {
+          // Late but deposit not fully depleted yet. Send warning notifications.
+          const daysRemaining = Math.max(0, Math.floor((securityDeposit - lateFee) / (1.5 * dailyPrice)));
+          console.log(`[BACKGROUND SCHEDULER] Rental ${rental._id} late by ${lateDays} days. Late fee: ₹${lateFee}. Deposit remaining: ₹${securityDeposit - lateFee}. Days left: ${daysRemaining}`);
+
+          // Daily late warning notification
+          await new Notification({
+            recipient: rental.buyer,
+            sender: "system",
+            item_name: rental.item_name,
+            price: rental.price_per_day,
+            days: rental.days,
+            total_price: lateFee.toString(),
+            rental_id: rental._id.toString(),
+            type: "late_warning_buyer",
+          }).save();
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[BACKGROUND SCHEDULER] Error during scan:", error);
+  }
+};
+
+// Check every 10 minutes in production, run a scan 5 seconds after startup
+setInterval(checkOverdueRentals, 10 * 60 * 1000);
+setTimeout(checkOverdueRentals, 5000);
 
 server.listen(port, () => {
   console.log(`CampusTrade server running on port ${port}`);
