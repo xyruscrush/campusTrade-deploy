@@ -17,6 +17,7 @@ const statusConfig = {
   active: { label: "Active", color: "#10b981", bg: "rgba(16,185,129,0.12)", border: "rgba(16,185,129,0.25)" },
   returned: { label: "Returned", color: "#6366f1", bg: "rgba(99,102,241,0.12)", border: "rgba(99,102,241,0.25)" },
   completed: { label: "Completed", color: "#a78bfa", bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.25)" },
+  disputed: { label: "Disputed & Suspended", color: "#ef4444", bg: "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.25)" },
 };
 
 function StatusBadge({ status }) {
@@ -74,6 +75,26 @@ function RentalCard({ rental, isSeller, onMarkReturned, onVerifyHandover, access
   const remainingStr = rental.status === "active" && rental.handoverAt
     ? getTimeRemaining(rental.handoverAt, rental.days)
     : null;
+
+  const dailyPrice = parseFloat(rental.price_per_day);
+  const securityDeposit = parseFloat(rental.security_deposit || "0");
+
+  let lateDays = 0;
+  let accumulatedLateFee = 0;
+  let remainingDeposit = securityDeposit;
+  let isOverdue = false;
+
+  if (rental.status === "active" && rental.handoverAt) {
+    const deadline = new Date(new Date(rental.handoverAt).getTime() + rental.days * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    if (now > deadline) {
+      isOverdue = true;
+      const diff = now - deadline;
+      lateDays = Math.ceil(diff / (1000 * 60 * 60 * 24));
+      accumulatedLateFee = lateDays * (1.5 * dailyPrice);
+      remainingDeposit = Math.max(0, securityDeposit - accumulatedLateFee);
+    }
+  }
 
   const handleVerify = async () => {
     if (!otpVal) return setError("Enter OTP");
@@ -182,9 +203,26 @@ function RentalCard({ rental, isSeller, onMarkReturned, onVerifyHandover, access
                 <div className="text-xs text-gray-400 space-y-1">
                   <p>📅 Handed over on: <span className="text-gray-300 font-medium">{handoverDateStr}</span></p>
                   <p>🚨 Due date: <span className="text-gray-300 font-medium">{dueDateStr}</span></p>
-                  <p className="font-semibold mt-1" style={{ color: remainingStr.includes("OVERDUE") ? "#ef4444" : "#10b981" }}>
+                  <p className="font-semibold mt-1" style={{ color: isOverdue ? "#ef4444" : "#10b981" }}>
                     Time Remaining: {remainingStr}
                   </p>
+
+                  {isOverdue && (
+                    <div className="mt-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/20 space-y-1 text-slate-300">
+                      <p className="text-red-400 font-bold text-xs flex items-center gap-1">
+                        ⚠️ Overdue Warning (1.5x Daily Late Fee)
+                      </p>
+                      <p className="text-[11px]">
+                        Late Fee Accumulated: <strong className="text-white">₹{accumulatedLateFee.toFixed(2)}</strong> (₹{(1.5 * dailyPrice).toFixed(2)}/day)
+                      </p>
+                      <p className="text-[11px]">
+                        Remaining Deposit Escrow: <strong className="text-white">₹{remainingDeposit.toFixed(2)}</strong> / ₹{securityDeposit.toFixed(2)}
+                      </p>
+                      <p className="text-[10px] text-gray-500 italic mt-1 leading-normal">
+                        *If late fees completely consume the deposit, your account will be suspended.*
+                      </p>
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -203,6 +241,26 @@ function RentalCard({ rental, isSeller, onMarkReturned, onVerifyHandover, access
                 </div>
               </>
             )}
+
+            {rental.status === "disputed" && (
+              <>
+                <p className="text-xs font-semibold text-red-500">
+                  ⚠️ Deposit Exhausted & Suspended
+                </p>
+                <div className="text-xs text-gray-400 space-y-1.5 mt-2">
+                  <p>📅 Handed over on: <span className="text-gray-300 font-medium">{handoverDateStr}</span></p>
+                  <p className="text-red-400 font-bold">
+                    🚨 Security Deposit (₹{rental.security_deposit}) fully consumed by late fees!
+                  </p>
+                  <p className="text-red-300 font-medium leading-relaxed">
+                    {isSeller 
+                      ? "The buyer failed to return the item. Their account has been suspended and escalated to the college administration."
+                      : "Your account is suspended for failing to return this item. College administration has been notified."
+                    }
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -218,7 +276,7 @@ function RentalCard({ rental, isSeller, onMarkReturned, onVerifyHandover, access
           <FiMessageSquare size={13} />
           Chat
         </button>
-        {isSeller && rental.status === "active" && (
+        {isSeller && (rental.status === "active" || rental.status === "disputed") && (
           <button
             onClick={() => onMarkReturned(rental._id)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-amber-300 hover:text-white transition-all"
