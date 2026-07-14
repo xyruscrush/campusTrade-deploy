@@ -13,6 +13,7 @@ import {
 } from "react-icons/fi";
 
 const statusConfig = {
+  pending_handover: { label: "Pending Handover", color: "#f59e0b", bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.25)" },
   active: { label: "Active", color: "#10b981", bg: "rgba(16,185,129,0.12)", border: "rgba(16,185,129,0.25)" },
   returned: { label: "Returned", color: "#6366f1", bg: "rgba(99,102,241,0.12)", border: "rgba(99,102,241,0.25)" },
   completed: { label: "Completed", color: "#a78bfa", bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.25)" },
@@ -34,13 +35,40 @@ function StatusBadge({ status }) {
   );
 }
 
-function RentalCard({ rental, isSeller, onMarkReturned }) {
+function RentalCard({ rental, isSeller, onMarkReturned, onVerifyHandover, accessToken }) {
   const navigate = useNavigate();
+  const [otpVal, setOtpVal] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [error, setError] = useState("");
+
   const date = new Date(rental.createdAt).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
+
+  const handleVerify = async () => {
+    if (!otpVal) return setError("Enter OTP");
+    setVerifying(true);
+    setError("");
+    try {
+      const res = await axios.post(
+        `/api/verify-handover/${rental._id}`,
+        { otp: otpVal },
+        { headers: { Authorization: `Bearer ${accessToken}` }, withCredentials: true }
+      );
+      if (res.data.success) {
+        onVerifyHandover(rental._id);
+      } else {
+        setError(res.data.message);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Verification failed");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   return (
     <div
       className="rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-lg"
@@ -70,9 +98,43 @@ function RentalCard({ rental, isSeller, onMarkReturned }) {
             </span>
             <span className="font-medium text-emerald-400">₹{rental.total_price}</span>
           </div>
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-gray-600 mb-2">
             {isSeller ? `Rented by: ${rental.buyer}` : `From: ${rental.seller}`}
           </p>
+
+          {/* Buyer view of OTP */}
+          {!isSeller && rental.status === "pending_handover" && (
+            <div className="mt-3 p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 text-xs text-indigo-300">
+              <p className="font-semibold mb-1">🔑 Handover Verification Code: <span className="font-mono text-sm bg-indigo-500/20 px-2 py-0.5 rounded text-white font-bold">{rental.handover_otp || "1234"}</span></p>
+              <p className="text-gray-400">Share this code with the seller when you receive the item to complete the handover.</p>
+            </div>
+          )}
+
+          {/* Seller input for OTP */}
+          {isSeller && rental.status === "pending_handover" && (
+            <div className="mt-3 p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-xs text-amber-300">
+              <p className="font-semibold mb-2">Verify Handover OTP</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="4-digit OTP"
+                  maxLength={4}
+                  value={otpVal}
+                  onChange={(e) => setOtpVal(e.target.value.replace(/\D/g, ""))}
+                  className="bg-transparent border border-white/10 rounded px-2.5 py-1 text-white font-bold text-center w-24 outline-none focus:border-amber-500/50"
+                />
+                <button
+                  onClick={handleVerify}
+                  disabled={verifying}
+                  className="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-800 text-slate-900 font-bold px-3 py-1 rounded transition-all"
+                >
+                  {verifying ? "Verifying..." : "Verify"}
+                </button>
+              </div>
+              {error && <p className="text-red-400 mt-1 font-semibold">{error}</p>}
+              <p className="text-gray-500 mt-1 text-[10px]">*(Mock OTP: 1234)*</p>
+            </div>
+          )}
         </div>
       </div>
       <div
@@ -154,6 +216,14 @@ export default function RentalHistory() {
       showToast("Failed to mark as returned", "error");
     }
   };
+
+  const handleVerifyHandoverSuccess = (rentalId) => {
+    setSellerRentals((prev) =>
+      prev.map((r) => (r._id === rentalId ? { ...r, status: "active" } : r))
+    );
+    showToast("Handover verified successfully! Rental is now active.");
+  };
+
 
   const current = activeTab === "buyer" ? buyerRentals : sellerRentals;
 
@@ -265,6 +335,8 @@ export default function RentalHistory() {
                 rental={rental}
                 isSeller={activeTab === "seller"}
                 onMarkReturned={handleMarkReturned}
+                onVerifyHandover={handleVerifyHandoverSuccess}
+                accessToken={accessToken}
               />
             ))}
           </div>
